@@ -62,17 +62,55 @@ Tu Lambda necesita permisos para leer y escribir en DynamoDB.
                 "dynamodb:GetItem"
             ],
             "Resource": "arn:aws:dynamodb:TU_REGION:TU_ACCOUNT_ID:table/TU_NOMBRE_DE_TABLA"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "execute-api:ManageConnections"
+            ],
+            "Resource": "arn:aws:execute-api:TU_REGION:TU_ACCOUNT_ID:TU_API_ID/*"
         }
     ]
 }
 ```
-*(No olvides reemplazar `TU_REGION`, `TU_ACCOUNT_ID` y `TU_NOMBRE_DE_TABLA` con tus datos. Por ejemplo: `arn:aws:dynamodb:us-east-1:123456789012:table/RoomAliases`)*
+*(No olvides reemplazar `TU_REGION`, `TU_ACCOUNT_ID`, `TU_NOMBRE_DE_TABLA` y `TU_API_ID` con tus datos).*
 
 5. Ponle un nombre a la política (ej. `DynamoDBAliasAccess`) y guárdala.
 
 ---
 
-## 4. Flujo de Trabajo (Cómo funciona)
+## 4. Preparación de API Gateway (WebSockets) y conexión con Lambda
+
+Para que tu función Lambda pueda recibir los eventos de conexión, desconexión y mensajes desde los clientes, debes configurar API Gateway para WebSockets y conectarlo a tu Lambda.
+
+### Pasos para configurar API Gateway:
+1. En la consola de AWS, ve a **API Gateway** y haz clic en **Crear API** (Create API).
+2. Selecciona **API de WebSocket** y haz clic en **Compilar** (Build).
+3. **Nombre de la API**: Ej. `MultiplayerGameAPI`.
+4. **Expresión de selección de ruta (Route Selection Expression)**: Escribe `$request.body.action`. Esto le dice a API Gateway que busque el campo `action` en los mensajes JSON entrantes para saber a qué ruta enviarlos. Haz clic en **Siguiente**.
+
+### Configuración de Rutas y conexión con Lambda:
+1. En la sección de **Agregar rutas** (Add routes), asegúrate de tener o agregar las siguientes rutas:
+   - `$connect`
+   - `$disconnect`
+   - `$default`
+2. Agrega también rutas personalizadas (Custom routes) escribiendo sus nombres y haciendo clic en "Agregar ruta":
+   - `get_id`
+   - `route`
+3. Haz clic en **Siguiente** para ir a la sección **Asociar integraciones** (Attach integrations).
+4. Para **cada una de las rutas** que agregaste (`$connect`, `$disconnect`, `$default`, `get_id`, `route`):
+   - En **Tipo de integración** (Integration type), selecciona **Función Lambda**.
+   - En **Región de AWS**, selecciona la región donde creaste tu Lambda.
+   - En **Función Lambda**, selecciona el nombre de la Lambda que creaste y modificamos.
+5. Haz clic en **Siguiente**, define un nombre de etapa (ej. `prod` o `dev`), y finalmente haz clic en **Crear e implementar** (Create and deploy).
+
+> **Importante**: API Gateway le pedirá permiso automáticamente para invocar a tu función Lambda. Si te aparece una ventana emergente, acéptala. Al finalizar, API Gateway te proporcionará una **URL de conexión de WebSocket** (ej. `wss://xxxx.execute-api.region.amazonaws.com/prod`). Esta es la URL que deberán usar tus clientes en Unity o en la web.
+
+6. Habilitar la comunicación bidireccional.
+
+---
+
+## 5. Flujo de Trabajo (Cómo funciona)
 
 1. **El host se conecta**: API Gateway le asigna un ID largo. El host envía la acción `get_id` a la Lambda.
 2. **Generación del Alias**: La Lambda genera un código de 6 letras/números, lo guarda en DynamoDB (con expiración en 1 hora) y se lo devuelve al host.
