@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multiplayer WS Test</title>
+    <style>
+        body { font-family: sans-serif; display: flex; gap: 20px; padding: 20px; }
+        .panel { border: 1px solid #ccc; padding: 15px; border-radius: 8px; width: 300px; }
+        .log { background: #f4f4f4; padding: 10px; height: 150px; overflow-y: auto; font-size: 0.9em; margin-bottom: 10px; }
+        button, input { margin-top: 5px; width: 100%; padding: 5px; box-sizing: border-box; }
+        h3 { margin-top: 0; }
+    </style>
+</head>
+<body>
+
+<div class="panel" id="host-panel">
+    <h3>Host</h3>
+    <input type="text" id="ws-url" placeholder="wss://your-api-id.execute-api.region.amazonaws.com/stage" value="wss://your-ws-url-here" />
+    <button id="host-connect">1. Connect Host</button>
+    <div id="host-id-display">ID: (not connected)</div>
+    <div class="log" id="host-log"></div>
+    <input type="text" id="host-move-data" placeholder="Move data (e.g. up)" />
+    <button id="host-move">Move</button>
+    <input type="text" id="host-msg-data" placeholder="Direct Message" />
+    <button id="host-msg">Send Msg (To All)</button>
+</div>
+
+<div class="panel" id="guest-panel">
+    <h3>Guest</h3>
+    <button id="guest-connect">1. Connect Guest</button>
+    <div id="guest-id-display">ID: (not connected)</div>
+    <input type="text" id="join-host-id" placeholder="Host ID" />
+    <button id="guest-join">2. Join Host</button>
+    <div class="log" id="guest-log"></div>
+    <input type="text" id="guest-move-data" placeholder="Move data (e.g. right)" />
+    <button id="guest-move">Move</button>
+    <input type="text" id="guest-msg-data" placeholder="Direct Message" />
+    <button id="guest-msg">Send Msg (To All)</button>
+    <button id="guest-leave">Leave</button>
+</div>
+
+<script type="module">
+    import { GameHost } from './GameHost.js';
+    import { GameGuest } from './GameGuest.js';
+
+    let host, guest;
+
+    function log(panelId, message) {
+        const div = document.getElementById(panelId);
+        div.innerHTML += `<div>${new Date().toLocaleTimeString()}: ${message}</div>`;
+        div.scrollTop = div.scrollHeight;
+    }
+
+    // HOST LOGIC
+    document.getElementById('host-connect').onclick = () => {
+        const url = document.getElementById('ws-url').value;
+        host = new GameHost({
+            wsUrl: url,
+            turnTimeout: 5000,
+            onReady: (id) => {
+                document.getElementById('host-id-display').innerText = `ID: ${id}`;
+                log('host-log', `Ready. Share ID: ${id}`);
+            },
+            onJoin: (guestId) => log('host-log', `Guest joined: ${guestId}`),
+            onLeave: (guestId) => log('host-log', `Guest left: ${guestId}`),
+            onMoves: (moves) => log('host-log', `Turn resolved: ${JSON.stringify(moves)}`),
+            onMessage: (msg, senderId) => log('host-log', `Msg from ${senderId}: ${msg}`)
+        });
+        host.connect();
+    };
+
+    document.getElementById('host-move').onclick = () => {
+        if (!host) return;
+        const moveData = document.getElementById('host-move-data').value;
+        host.move(moveData);
+        log('host-log', `Moved: ${moveData}`);
+    };
+
+    document.getElementById('host-msg').onclick = () => {
+        if (!host) return;
+        const msg = document.getElementById('host-msg-data').value;
+        host.send(msg); // null targets sends to all
+        log('host-log', `Sent Msg: ${msg}`);
+    };
+
+    // GUEST LOGIC
+    document.getElementById('guest-connect').onclick = () => {
+        const url = document.getElementById('ws-url').value; // Use same URL
+        guest = new GameGuest({
+            wsUrl: url,
+            onReady: (id) => {
+                document.getElementById('guest-id-display').innerText = `ID: ${id}`;
+                log('guest-log', `Ready. ID: ${id}`);
+            },
+            onJoined: (hostId, guests) => log('guest-log', `Joined Host ${hostId}. Players: ${guests.length + 1}`),
+            onLeave: () => log('guest-log', `Left/Kicked from host.`),
+            onMoves: (moves) => log('guest-log', `Turn resolved: ${JSON.stringify(moves)}`),
+            onMessage: (msg, senderId) => log('guest-log', `Msg from ${senderId}: ${msg}`)
+        });
+        guest.connect();
+    };
+
+    document.getElementById('guest-join').onclick = () => {
+        if (!guest) return;
+        const hostId = document.getElementById('join-host-id').value;
+        guest.join(hostId);
+    };
+
+    document.getElementById('guest-move').onclick = () => {
+        if (!guest) return;
+        const moveData = document.getElementById('guest-move-data').value;
+        guest.move(moveData);
+        log('guest-log', `Moved: ${moveData}`);
+    };
+
+    document.getElementById('guest-msg').onclick = () => {
+        if (!guest) return;
+        const msg = document.getElementById('guest-msg-data').value;
+        guest.send(msg); // null targets sends to all
+        log('guest-log', `Sent Msg: ${msg}`);
+    };
+
+    document.getElementById('guest-leave').onclick = () => {
+        if (!guest) return;
+        guest.leave();
+    };
+</script>
+
+</body>
+</html>
